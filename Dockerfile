@@ -1,12 +1,12 @@
 FROM alpine:3.20
 
-RUN apk add --no-cache curl \
+RUN apk add --no-cache curl openjdk17-jre-headless \
     && addgroup -g 1000 brouter \
     && adduser -u 1000 -G brouter -h /app -D brouter \
     && mkdir -p /app/run /segments4 \
     && chown -R brouter:brouter /app /segments4
 
-COPY --chmod=755 src/sync.sh src/healthcheck.sh /app/
+COPY --chmod=755 src/sync.sh src/healthcheck.sh lib/rd5diff.jar /app/
 
 ENV SEGMENTS_DIR=/segments4
 

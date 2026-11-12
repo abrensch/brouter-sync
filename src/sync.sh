@@ -25,11 +25,46 @@ log() {
 # fetch downloads one segment when the upstream copy is newer than the
 # local file. xargs runs it as a separate process per segment. curl
 # retries transient errors and a refused connection, not a missing file.
+# tries rd5-diff recovery if a diff file for the md5 of local file exists
 fetch() {
     name=$1
     file="${SEGMENTS_DIR}/${name}.rd5"
     tmp="${file}.tmp"
+    diff_tmp="${file}.df5"
 
+    # Try delta update if local RD5 exists
+    if [ -s "${file}" ]; then
+        md5=$(md5sum "${file}")
+        md5=${md5%% *}
+
+        diff_url="${SEGMENTS_URL}/diff/${name}/${md5}.df5"
+
+        rm -f "${diff_tmp}" "${tmp}"
+
+        if curl --fail --silent --location \
+            --retry 2 \
+            --output "${diff_tmp}" "${diff_url}" &&
+            [ -s "${diff_tmp}" ]; then
+
+            log "applying diff ${name} (${md5})"
+
+            if java -jar rd5diff.jar \
+                "${file}" "${diff_tmp}" "${tmp}" &&
+                [ -s "${tmp}" ]; then
+
+                mv "${tmp}" "${file}"
+                rm -f "${diff_tmp}"
+                log "recovered ${name}"
+                return 0
+            fi
+
+            log "diff recovery failed ${name}"
+        fi
+
+        rm -f "${diff_tmp}" "${tmp}"
+    fi
+
+    # Fall back to full download
     set -- --fail --silent --show-error --location --retry 3 --retry-connrefused \
         --remote-time --output "${tmp}"
     if [ -f "${file}" ]; then
